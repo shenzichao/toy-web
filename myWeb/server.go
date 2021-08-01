@@ -9,7 +9,8 @@ import (
 // Server 是http server 的顶级抽象
 type Server interface {
 	// Route 选择路由, 命中会执行handlerFunc
-	Route(pattern string, handlerFunc func(ctx *Context))
+	// 支持 REST API的类型 POST PUT DELETE GET
+	Route(method, pattern string, handlerFunc func(ctx *Context))
 	// Start 启动 server
 	Start(address string) error
 }
@@ -17,18 +18,20 @@ type Server interface {
 // 基于 Go的net/http实现 http server
 type sdkHttpServer struct {
 	// Name server的名称
-	Name string
+	Name    string
+	handler *HandlerBasedOnMap
 }
 
-func (s *sdkHttpServer) Route(pattern string, handlerFunc func(ctx *Context)) {
-	http.HandleFunc(pattern, func(writer http.ResponseWriter,
-		req *http.Request) {
-		ctx := NewContext(writer, req)
-		handlerFunc(ctx)
-	})
+func (s *sdkHttpServer) Route(method, pattern string,
+	handlerFunc func(ctx *Context)) {
+	// TODO: 与HandlerBasedOnMap 强耦合 s.handler.handlers意味着需要知道s.handler的底层实现，需要解耦
+	key := s.handler.key(method, pattern)
+	s.handler.handlers[key] = handlerFunc
 }
 
 func (s *sdkHttpServer) Start(address string) error {
+	// 注册根路由的handler
+	http.Handle("/", s.handler)
 	return http.ListenAndServe(address, nil)
 }
 
@@ -47,6 +50,9 @@ type commonResponse struct {
 func NewSdkHttpServer(name string) Server {
 	return &sdkHttpServer{
 		Name: name,
+		handler: &HandlerBasedOnMap{
+			handlers: make(map[string]func(ctx *Context)),
+		},
 	}
 }
 
@@ -78,6 +84,6 @@ func homePage(w http.ResponseWriter, r *http.Request) {
 func main() {
 	server := NewSdkHttpServer("test_server")
 	//server.Route("/", homePage)
-	server.Route("/signup", SignUp)
+	server.Route("POST", "/signup", SignUp)
 	server.Start(":8080")
 }
