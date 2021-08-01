@@ -25,7 +25,7 @@ func home(w http.ResponseWriter, r *http.Request) {
 }
 
 // 单纯使用Go的http库实现web
-func main() {
+func main1() {
 	http.HandleFunc("/", home)
 	http.ListenAndServe(":8080", nil)
 

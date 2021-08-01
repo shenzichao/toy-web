@@ -9,7 +9,7 @@ import (
 // Server 是http server 的顶级抽象
 type Server interface {
 	// Route 选择路由, 命中会执行handlerFunc
-	Route(pattern string, handlerFunc http.HandlerFunc)
+	Route(pattern string, handlerFunc func(ctx *Context))
 	// Start 启动 server
 	Start(address string) error
 }
@@ -20,8 +20,12 @@ type sdkHttpServer struct {
 	Name string
 }
 
-func (s *sdkHttpServer) Route(pattern string, handlerFunc http.HandlerFunc) {
-	http.HandleFunc(pattern, handlerFunc)
+func (s *sdkHttpServer) Route(pattern string, handlerFunc func(ctx *Context)) {
+	http.HandleFunc(pattern, func(writer http.ResponseWriter,
+		req *http.Request) {
+		ctx := NewContext(writer, req)
+		handlerFunc(ctx)
+	})
 }
 
 func (s *sdkHttpServer) Start(address string) error {
@@ -31,7 +35,7 @@ func (s *sdkHttpServer) Start(address string) error {
 type signUpReq struct {
 	Email             string `json:"email"` // ``中的Tag 在运行时使用reflect
 	Password          string `json:"password"`
-	ConfirmedPassword string `json:"confirmed-password"`
+	ConformedPassword string `json:"conformed-password"`
 }
 
 type commonResponse struct {
@@ -47,18 +51,12 @@ func NewSdkHttpServer(name string) Server {
 }
 
 // SignUp 用户注册
-func SignUp(w http.ResponseWriter, r *http.Request) {
+func SignUp(ctx *Context) {
 	req := &signUpReq{}
-
-	// TODO: Context应该在框架层面来创建
-	ctx := Context{
-		W: w,
-		R: r,
-	}
 
 	err := ctx.ReadJson(req)
 	if err != nil {
-		fmt.Fprintf(w, "read body data failed, err: %v", err)
+		ctx.BadRequestJson(err)
 		return
 	}
 
@@ -79,7 +77,7 @@ func homePage(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 	server := NewSdkHttpServer("test_server")
-	server.Route("/", homePage)
+	//server.Route("/", homePage)
 	server.Route("/signup", SignUp)
 	server.Start(":8080")
 }
