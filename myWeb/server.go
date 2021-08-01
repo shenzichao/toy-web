@@ -2,9 +2,7 @@ package main
 
 // 封装自己的web server
 import (
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 )
 
@@ -31,9 +29,15 @@ func (s *sdkHttpServer) Start(address string) error {
 }
 
 type signUpReq struct {
-	Email             string `json:"email"`
+	Email             string `json:"email"` // ``中的Tag 在运行时使用reflect
 	Password          string `json:"password"`
 	ConfirmedPassword string `json:"confirmed-password"`
+}
+
+type commonResponse struct {
+	BizCode int         `json:"biz_code"`
+	Msg     string      `json:"msg"`
+	Data    interface{} `json:"data"`
 }
 
 func NewSdkHttpServer(name string) Server {
@@ -45,20 +49,28 @@ func NewSdkHttpServer(name string) Server {
 // SignUp 用户注册
 func SignUp(w http.ResponseWriter, r *http.Request) {
 	req := &signUpReq{}
-	// TODO：47-57 的代码每次读取json输入都需要写一遍，branch verson2 引入context优化
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		fmt.Fprintf(w, "read body failed, error: %v", err)
-		return
+
+	// TODO: Context应该在框架层面来创建
+	ctx := Context{
+		W: w,
+		R: r,
 	}
-	err = json.Unmarshal(body, req)
+
+	err := ctx.ReadJson(req)
 	if err != nil {
-		fmt.Fprintf(w, "deserialied failed, err: %v", err)
+		fmt.Fprintf(w, "read body data failed, err: %v", err)
 		return
 	}
 
-	// 返回虚拟id表示注册成功
-	fmt.Fprintf(w, "%d", err)
+	resp := &commonResponse{
+		Data: "123",
+	}
+
+	err = ctx.WriteJson(http.StatusOK, resp)
+	if err != nil {
+		// 如果响应失败，不应再次使用 ResponseWriter 往 response 里写数据
+		fmt.Printf("写入响应失败, err: %v", err)
+	}
 }
 
 func homePage(w http.ResponseWriter, r *http.Request) {
